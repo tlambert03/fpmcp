@@ -1,6 +1,8 @@
+"""Main server module for FastMCP."""
+
 from fastmcp import FastMCP
 
-mcp = FastMCP("My MCP Server")
+mcp = FastMCP("FP Research Server")
 
 
 @mcp.tool
