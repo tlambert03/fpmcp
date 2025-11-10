@@ -7,6 +7,16 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+# Normalize multiple whitespace characters (spaces, newlines, tabs) into single space
+_WHITESPACE_RE = re.compile(r"\s+")
+
+# Match inline legend format: "aText for a.bText for b" where each marker is
+# lowercase letter followed by uppercase text, separated by periods
+_INLINE_LEGEND_RE = re.compile(r"([a-z])([A-Z].*?)(?=\.\s*[a-z][A-Z]|$)")
+
+# Match legend marker at start: 1-2 lowercase letters followed by text
+_LEGEND_MARKER_RE = re.compile(r"^([a-z]{1,2})(.+)$")
+
 
 def iter_tables(xml: str) -> Iterator[str]:
     """Parse JATS XML tables to markdown, handling rowspan/colspan.
@@ -52,54 +62,32 @@ def _get_cell_text(elem: ET.Element) -> str:
         parts.append(elem.text)
 
     for child in elem:
-        # Skip xref elements (citations)
         if child.tag == "xref":
-            # Keep tail text after the xref
             if child.tail:
                 parts.append(child.tail)
             continue
 
-        # Handle sup/sub based on their content
         if child.tag in ("sup", "sub"):
-            # Check if this sup/sub contains an xref (citation)
             if child.find(".//xref") is not None:
-                # This is a citation like <sup><xref>25</xref></sup>, skip it
                 if child.tail:
                     parts.append(child.tail)
                 continue
 
-            # Get the direct text content (no nested xref)
             child_text = "".join(child.itertext()).strip()
-
-            # Alphabetic footnote markers (1-2 letters)
             if child_text.isalpha() and len(child_text) <= 2:
                 parts.append(f" {child_text}")
-                if child.tail:
-                    parts.append(child.tail)
-                continue
+            elif child_text:
+                prefix = "^" if child.tag == "sup" else "_"
+                parts.append(f"{prefix}{child_text}")
+            if child.tail:
+                parts.append(child.tail)
+            continue
 
-            # Exponents/subscripts: convert to ^ or _ notation
-            if child_text:
-                if child.tag == "sup":
-                    parts.append(f"^{child_text}")
-                else:  # sub
-                    parts.append(f"_{child_text}")
-                if child.tail:
-                    parts.append(child.tail)
-                continue
-
-        # For all other elements, recursively process
         parts.append(_get_cell_text(child))
-
-        # Add tail text
         if child.tail:
             parts.append(child.tail)
 
-    # Join and normalize whitespace
-    # (collapse newlines/multiple spaces into single space)
-    text = "".join(parts)
-    text = re.sub(r"\s+", " ", text)  # Normalize whitespace
-    return text.strip()
+    return _WHITESPACE_RE.sub(" ", "".join(parts)).strip()
 
 
 def _parse_thead(thead: ET.Element) -> list[str]:
@@ -164,49 +152,25 @@ def _parse_tbody(tbody: ET.Element) -> list[list[str]]:
 
 
 def _format_legend(legend: str) -> str:
-    """Format legend as bulleted list for easier parsing.
-
-    Handles two formats:
-    1. Semicolon-separated: "aText for a;bText for b;cText for c"
-    2. Inline markers: "aText for a.bText for b.cText for c."
-    """
-    import re
-
-    # First, try to detect if this uses inline markers
-    # Pattern: single lowercase letter, uppercase + text, until next .marker or end
-    # Note: accounts for optional space after period (e.g., ". b" or ".b")
-    inline_pattern = r"([a-z])([A-Z].*?)(?=\.\s*[a-z][A-Z]|$)"
-    inline_matches = re.findall(inline_pattern, legend)
-
+    """Format legend as bulleted list."""
+    inline_matches = _INLINE_LEGEND_RE.findall(legend)
     if inline_matches and len(inline_matches) > 2:
-        # This appears to be inline format
-        formatted_items = []
-        for marker, text in inline_matches:
-            # Clean up text: remove trailing periods and whitespace
-            text = text.strip().rstrip(".")
-            if text:
-                formatted_items.append(f"- {marker}: {text}")
-        if formatted_items:
-            return "\n".join(formatted_items)
+        items = [
+            f"- {m}: {t.strip().rstrip('.')}"
+            for m, t in inline_matches
+            if t.strip().rstrip(".")
+        ]
+        if items:
+            return "\n".join(items)
 
-    # Otherwise, try semicolon-separated format
     parts = [p.strip() for p in legend.split(";") if p.strip()]
-
-    formatted_items = []
+    items = []
     for part in parts:
-        # Try to extract footnote marker at the start
-        match = re.match(r"^([a-z]{1,2})(.+)$", part)
-        if match:
-            marker, text = match.groups()
-            formatted_items.append(f"- {marker}: {text.strip()}")
+        if match := _LEGEND_MARKER_RE.match(part):
+            items.append(f"- {match[1]}: {match[2].strip()}")
         else:
-            # No marker found, just add as plain bullet
-            formatted_items.append(f"- {part}")
-
-    if formatted_items:
-        return "\n".join(formatted_items)
-
-    return legend  # Fallback to original if parsing fails
+            items.append(f"- {part}")
+    return "\n".join(items) if items else legend
 
 
 def _replace_common_unicode(text: str) -> str:

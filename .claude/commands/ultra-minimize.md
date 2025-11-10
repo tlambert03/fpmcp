@@ -7,7 +7,6 @@ understand the core change.
 
 DO:
 
-- remove all but the most important inline comments
 - eliminate verbosity, duplication, and unnecessary code
 - simplify logic where possible, using more concise constructs,
   list comprehensions, assignment expressions, built-in functions, etc.
@@ -15,6 +14,7 @@ DO:
 - run `prek -a` when done. if the ruff formatter turns your code into weird multi-line
   constructs, then you should fix your code (not ruff) to avoid that.
 - consider the signature of internal/private functions: can parameters be removed?
+- remove all inline comments that feel excessive or do not add value
 
 DO NOT:
 

@@ -53,7 +53,6 @@ def test_parse_tables(pmid: str | tuple[str, list[str]]) -> None:
         from rich.console import Console
         from rich.markdown import Markdown
 
-        print("\n\n-------------------Displaying tables for PMID:", pmid)
         console = Console()
         for table in tables:
             console.print(Markdown(table))
