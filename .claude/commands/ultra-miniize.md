@@ -14,6 +14,8 @@ DO:
 - simplify logic where possible, using more concise constructs,
   list comprehensions, assignment expressions, built-in functions, etc.
 - remove overly defensive code that is not strictly necessary for correct operation
+- run `prek -a` when done. if the ruff formatter turns your code into weird multi-line
+  constructs, then you should fix your code (not ruff) to avoid that.
 
 DO NOT:
 
