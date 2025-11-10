@@ -1,7 +1,6 @@
 import pytest
 from fastmcp.client import Client
 from fastmcp.client.transports import FastMCPTransport
-
 from fpmcp.server import mcp
 
 
