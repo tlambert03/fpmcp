@@ -17,8 +17,14 @@ def iter_tables(xml: str) -> Iterator[str]:
     """
     root = ET.fromstring(xml)
     for table_wrap in root.findall(".//table-wrap"):
+        elem = table_wrap.find(".//label")
+        label = "".join(elem.itertext()).strip() if elem is not None else ""
+
         elem = table_wrap.find(".//caption")
         caption = "".join(elem.itertext()).strip() if elem is not None else ""
+
+        elem = table_wrap.find(".//table-wrap-foot")
+        legend = "".join(elem.itertext()).strip() if elem is not None else ""
 
         if (table := table_wrap.find(".//table")) is None:
             continue
@@ -28,7 +34,7 @@ def iter_tables(xml: str) -> Iterator[str]:
         tbody = table.find(".//tbody")
         rows = _parse_tbody(tbody) if tbody is not None else []
 
-        yield _to_markdown(caption, headers, rows)
+        yield _to_markdown(label, caption, legend, headers, rows)
 
 
 def _parse_thead(thead: ET.Element) -> list[str]:
@@ -92,10 +98,21 @@ def _parse_tbody(tbody: ET.Element) -> list[list[str]]:
     ]
 
 
-def _to_markdown(caption: str, headers: list[str], rows: list[list[str]]) -> str:
+def _to_markdown(
+    label: str, caption: str, legend: str, headers: list[str], rows: list[list[str]]
+) -> str:
     """Convert table data to markdown format."""
-    lines = [f"**{caption}**\n"] if caption else []
+    lines = []
 
+    # Add label and caption as title
+    if label and caption:
+        lines.append(f"**{label}: {caption}**\n")
+    elif caption:
+        lines.append(f"**{caption}**\n")
+    elif label:
+        lines.append(f"**{label}**\n")
+
+    # Add table headers and data
     if headers:
         lines.extend(
             [
@@ -107,5 +124,9 @@ def _to_markdown(caption: str, headers: list[str], rows: list[list[str]]) -> str
     for row in rows:
         row.extend([""] * (len(headers) - len(row)))
         lines.append("| " + " | ".join(row) + " |")
+
+    # Add legend/footnotes at the end
+    if legend:
+        lines.append(f"\n**Legend:** {legend}")
 
     return "\n".join(lines)
