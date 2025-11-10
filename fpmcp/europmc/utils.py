@@ -1,6 +1,6 @@
 import requests
 
-from fpmcp.europmc_models import Model as SearchResponse
+from fpmcp.europmc.models import Model as SearchResponse
 
 
 def get_fulltext_from_europmc(pmid: str) -> str | None:
