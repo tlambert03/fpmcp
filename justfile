@@ -1,6 +1,9 @@
 serve:
     fastmcp run  # uses config at fastmcp.json
 
+test:
+    uv run pytest
+
 genmodel-europepmc-search:
     #!/usr/bin/env bash
     set -euo pipefail
