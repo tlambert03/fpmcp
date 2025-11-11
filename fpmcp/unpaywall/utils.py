@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+from functools import cache
+
+import requests
+
+EMAIL = "talley@hms.harvard.edu"
+
+
+@cache
+def check_unpaywall(doi: str) -> dict:
+    """Check Unpaywall for OA availability.
+
+    Parameters
+    ----------
+    doi : str
+        The DOI of the article to check.
+
+    Returns
+    -------
+    DOISchema
+        The Unpaywall response containing OA location and metadata.
+    """
+    url = f"https://api.unpaywall.org/v2/{doi}"
+    response = requests.get(url, params={"email": EMAIL})
+    response.raise_for_status()
+    return response.json()
