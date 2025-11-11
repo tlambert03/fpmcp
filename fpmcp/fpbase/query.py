@@ -61,7 +61,7 @@ def get_protein_references() -> Mapping[str, list[dict]]:
     protein_map: dict[str, list[dict]] = defaultdict(list)
     for ref in refs:
         for edge in ref["proteins"]["edges"]:
-            protein_name = edge["node"]["name"]
+            protein_name = str(edge["node"]["name"]).lower()
             ref_no_prots = {k: v for k, v in ref.items() if k != "proteins"}
             protein_map[protein_name].append(ref_no_prots)
     return protein_map

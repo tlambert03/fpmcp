@@ -131,12 +131,8 @@ def get_protein_article_ids(protein_name: str) -> list[str]:
     4. If not found in tables, call get_article_text(identifier) and search
     """
     protein_refs = get_protein_references()
-
-    if protein_name not in protein_refs:
-        return []
-
     article_ids = []
-    for ref in protein_refs[protein_name]:
+    for ref in protein_refs.get(protein_name.lower(), []):
         # Prioritize DOI, fallback to PMID
         if ref.get("doi"):
             article_ids.append(ref["doi"])
