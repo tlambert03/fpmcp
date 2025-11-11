@@ -3,5 +3,8 @@
     "source": {
         "path": "fpmcp/server.py",
         "entrypoint": "mcp"
+    },
+    "environment": {
+        "project": "."
     }
 }
