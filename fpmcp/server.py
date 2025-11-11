@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
+from fpmcp.fpbase.query import get_protein_references
 from fpmcp.fulltext import extract_tables, extract_text, get_fulltext
 
 mcp = FastMCP("FP Research Server")
@@ -97,3 +98,47 @@ def get_article_info(article_id: str) -> dict[str, str]:
         "pmid": result.article_id.pmid or "",
         "pmcid": result.article_id.pmcid or "",
     }
+
+
+@mcp.tool
+def get_protein_article_ids(protein_name: str) -> list[str]:
+    """Get article identifiers (DOI/PMID) for a fluorescent protein.
+
+    Searches the FPbase database for references associated with a specific
+    protein. Returns article identifiers that can be used with other tools
+    like get_article_tables() and get_article_text() to extract data.
+
+    Parameters
+    ----------
+    protein_name : str
+        Name of the fluorescent protein (e.g., "StayGold", "mCherry", "EGFP")
+
+    Returns
+    -------
+    list[str]
+        List of article identifiers, prioritizing DOI over PMID. Each entry
+        is either a DOI (e.g., "10.1038/...") or PMID (e.g., "12345678").
+        Returns empty list if protein not found.
+
+    Examples
+    --------
+    To find the quantum yield of StayGold:
+    1. Call get_protein_article_ids("StayGold") to get article identifiers
+    2. For each identifier, call get_article_tables(identifier)
+    3. Search the tables for "quantum yield" or "QY"
+    4. If not found in tables, call get_article_text(identifier) and search
+    """
+    protein_refs = get_protein_references()
+
+    if protein_name not in protein_refs:
+        return []
+
+    article_ids = []
+    for ref in protein_refs[protein_name]:
+        # Prioritize DOI, fallback to PMID
+        if ref.get("doi"):
+            article_ids.append(ref["doi"])
+        elif ref.get("pmid"):
+            article_ids.append(ref["pmid"])
+
+    return article_ids

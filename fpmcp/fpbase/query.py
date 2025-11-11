@@ -9,8 +9,8 @@ import requests
 URL = "https://www.fpbase.org/graphql/"
 GET_REFS = """{
   references {
-    pmid
     doi
+    pmid
     proteins { edges { node { id name } } }
   }
 }
@@ -55,13 +55,13 @@ def dois() -> Mapping[str, list[str]]:
     return doi_map
 
 
-def protein_refs() -> Mapping[str, list[str]]:
-    """Get mapping of protein IDs to associated PMIDs and DOIs."""
+def get_protein_references() -> Mapping[str, list[dict]]:
+    """Get mapping of protein names to associated references (with DOI/PMID)."""
     refs = get_references()
     protein_map: dict[str, list[dict]] = defaultdict(list)
     for ref in refs:
         for edge in ref["proteins"]["edges"]:
-            protein_id = edge["node"]["id"]
+            protein_name = edge["node"]["name"]
             ref_no_prots = {k: v for k, v in ref.items() if k != "proteins"}
-            protein_map[protein_id].append(ref_no_prots)
+            protein_map[protein_name].append(ref_no_prots)
     return protein_map

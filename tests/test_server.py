@@ -12,11 +12,12 @@ async def main_mcp_client():
 
 async def test_list_tools(main_mcp_client: Client[FastMCPTransport]):
     list_tools = await main_mcp_client.list_tools()
-    assert len(list_tools) >= 3
+    assert len(list_tools) >= 4
     tool_names = [tool.name for tool in list_tools]
     assert "get_article_tables" in tool_names
     assert "get_article_text" in tool_names
     assert "get_article_info" in tool_names
+    assert "get_protein_article_ids" in tool_names
 
 
 async def test_get_article_tables(main_mcp_client: Client[FastMCPTransport]):
@@ -115,3 +116,16 @@ async def test_get_article_info(main_mcp_client: Client[FastMCPTransport]):
     assert "doi" in info_str.lower()
     # Should contain the DOI we requested
     assert "10.1038/s41592-023-02085-6" in info_str
+
+
+async def test_get_protein_article_ids(main_mcp_client: Client[FastMCPTransport]):
+    """Test getting article IDs for a protein."""
+    result = await main_mcp_client.call_tool(
+        "get_protein_article_ids", {"protein_name": "StayGold"}
+    )
+    ids_str = result.content[0].text
+    assert isinstance(ids_str, str)
+    assert len(ids_str) > 0
+    # Should contain at least one article identifier
+    # The StayGold paper should be in the results
+    assert "10.1038" in ids_str or "PMC" in ids_str or any(c.isdigit() for c in ids_str)
