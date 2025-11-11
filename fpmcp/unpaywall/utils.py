@@ -8,7 +8,7 @@ EMAIL = "talley@hms.harvard.edu"
 
 
 @cache
-def check_unpaywall(doi: str) -> dict:
+def get_unpaywall_data(doi: str) -> dict:
     """Check Unpaywall for OA availability.
 
     Parameters

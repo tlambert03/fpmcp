@@ -86,6 +86,7 @@ def get_article_info(article_id: str) -> dict[str, str]:
         - doi: Article DOI
         - pmid: PubMed ID (if available)
         - pmcid: PubMed Central ID (if available)
+        - url: URL where the full-text can be accessed
     """
     result = get_fulltext(article_id)
     if result is None:
@@ -97,6 +98,7 @@ def get_article_info(article_id: str) -> dict[str, str]:
         "doi": result.article_id.doi or "",
         "pmid": result.article_id.pmid or "",
         "pmcid": result.article_id.pmcid or "",
+        "url": result.url,
     }
 
 

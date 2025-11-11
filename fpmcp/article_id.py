@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import requests
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from typing import Any
 
 
@@ -40,6 +41,47 @@ class ArticleIdentifier:
             and self.pmid == value.pmid
             and self.pmcid == value.pmcid
         )
+
+    def __repr__(self) -> str:
+        return (
+            f"ArticleIdentifier(doi={self.doi!r}, pmid={self.pmid!r}, "
+            f"pmcid={self.pmcid!r})"
+        )
+
+    def __rich_repr__(self) -> Iterable[tuple[str, str | list[str] | None]]:
+        return self.__iter__()
+
+    def __iter__(self) -> Iterable[tuple[str, str | list[str] | None]]:
+        yield ("doi", self.doi)
+        yield ("pmid", self.pmid)
+        yield ("pmcid", self.pmcid)
+        yield ("source_id", self.source_id)
+        if upd := self.unpaywall_data():
+            if locations := upd.get("oa_locations", []):
+                yield (
+                    "urls_for_pdf",
+                    sorted(
+                        {url for loc in locations if (url := loc.get("url_for_pdf"))}
+                    ),
+                )
+                yield (
+                    "url_for_landing_pages",
+                    sorted(
+                        {
+                            url
+                            for loc in locations
+                            if (url := loc.get("url_for_landing_page"))
+                        }
+                    ),
+                )
+
+    def unpaywall_data(self) -> dict[str, Any]:
+        """Fetch Unpaywall metadata for this article, if DOI is available."""
+        if not self.doi:
+            return {}
+        from fpmcp.unpaywall.utils import get_unpaywall_data
+
+        return get_unpaywall_data(self.doi)
 
     def _complete_identifiers(self) -> bool:
         """Fill in missing identifiers via API calls."""

@@ -1,3 +1,3 @@
-from .utils import check_unpaywall
+from .utils import get_unpaywall_data
 
-__all__ = ["check_unpaywall"]
+__all__ = ["get_unpaywall_data"]

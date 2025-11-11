@@ -20,7 +20,7 @@ import requests
 from fpmcp.article_id import ArticleIdentifier
 from fpmcp.crossref.utils import get_fulltext_urls_from_crossref
 from fpmcp.europmc.utils import _fulltext_xml, _search
-from fpmcp.unpaywall.utils import check_unpaywall
+from fpmcp.unpaywall.utils import get_unpaywall_data
 
 
 @dataclass
@@ -37,12 +37,15 @@ class FullTextResult:
         Raw content (str for XML, bytes for PDF)
     article_id : ArticleIdentifier
         Normalized article identifiers
+    url : str
+        URL where the full-text can be accessed
     """
 
     source: Literal["europmc", "unpaywall", "crossref"]
     format: Literal["xml", "pdf"]
     content: str | bytes
     article_id: ArticleIdentifier
+    url: str
 
 
 def get_fulltext(any_id: str | ArticleIdentifier) -> FullTextResult | None:
@@ -108,6 +111,7 @@ def _try_europmc(article_id: ArticleIdentifier) -> FullTextResult | None:
                     format="xml",
                     content=xml_content,
                     article_id=article_id,
+                    url=f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                 )
     except Exception:
         pass
@@ -121,17 +125,24 @@ def _try_unpaywall(article_id: ArticleIdentifier) -> FullTextResult | None:
         return None
 
     try:
-        data = check_unpaywall(article_id.doi)
+        data = get_unpaywall_data(article_id.doi)
 
         # Prioritize best_oa_location
         if best_loc := data.get("best_oa_location"):
             if pdf_url := best_loc.get("url_for_pdf"):
                 if pdf_content := _download_pdf(pdf_url):
+                    # Use landing page URL if available, otherwise PDF URL
+                    url = (
+                        best_loc.get("url_for_landing_page")
+                        or best_loc.get("url")
+                        or pdf_url
+                    )
                     return FullTextResult(
                         source="unpaywall",
                         format="pdf",
                         content=pdf_content,
                         article_id=article_id,
+                        url=url,
                     )
     except Exception:
         pass
@@ -155,6 +166,7 @@ def _try_crossref(article_id: ArticleIdentifier) -> FullTextResult | None:
                     format="pdf",
                     content=pdf_content,
                     article_id=article_id,
+                    url=pdf_url,
                 )
     except Exception:
         pass
