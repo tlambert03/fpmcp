@@ -530,6 +530,19 @@ wheels = [
 ]
 
 [[package]]
+name = "fpbase"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/97/2a/63face7d4a14e013b1de53af2718b27ea6a28f1864eb3e24c5beea8bfc9d/fpbase-0.1.2.tar.gz", hash = "sha256:8025f7a043152d73a2b9d796413bc44ee09f402c70c39f03c500a864fb9a695a", size = 14067, upload-time = "2024-12-13T13:32:13.392Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/8e/6b5925bc2a3ca912d1d75dbce6ad8c0ce71a416c0a34fc7f431998a7c964/fpbase-0.1.2-py3-none-any.whl", hash = "sha256:bcc1ca6b2ba9bea0081427153ef4265a40af15618b8bc890d3cd57935862a595", size = 11600, upload-time = "2024-12-13T13:32:10.439Z" },
+]
+
+[[package]]
 name = "fpmcp"
 source = { editable = "." }
 dependencies = [
@@ -541,6 +554,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "datamodel-code-generator" },
+    { name = "fpbase" },
     { name = "ipython" },
     { name = "prek" },
     { name = "pytest" },
@@ -566,6 +580,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "datamodel-code-generator", specifier = ">=0.35.0" },
+    { name = "fpbase", specifier = ">=0.1.2" },
     { name = "ipython", specifier = ">=8.18.1" },
     { name = "prek", specifier = ">=0.2.13" },
     { name = "pytest", specifier = ">=8.4.2" },

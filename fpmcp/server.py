@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from fastmcp import FastMCP
 
 from fpmcp.fpbase.query import get_protein_references
@@ -100,6 +102,115 @@ def get_article_info(article_id: str) -> dict[str, str]:
         "pmcid": result.article_id.pmcid or "",
         "url": result.url,
     }
+
+
+@mcp.tool
+def search_article_text(
+    article_id: str, pattern: str, context_chars: int = 500
+) -> list[dict[str, str | int]]:
+    """Search article text for a pattern and return matching snippets.
+
+    This tool searches the full text of an article without loading the entire
+    text into the agent's context. Only matching snippets with surrounding
+    context are returned, making it efficient for finding specific information
+    in large articles.
+
+    Parameters
+    ----------
+    article_id : str
+        Any article identifier: DOI, PMID, or PMCID
+    pattern : str
+        Regular expression pattern to search for. Use raw strings for complex
+        patterns (e.g., r"\\d+ amino acids?" to find sequence lengths)
+    context_chars : int, optional
+        Number of characters to include before and after each match for context.
+        Default is 500 characters.
+
+    Returns
+    -------
+    list[dict]
+        List of matches, where each match is a dictionary with:
+        - text: The matched text plus surrounding context
+        - position: Character position of match in full text
+        - match: The exact text that matched the pattern
+
+    Examples
+    --------
+    Find sequence length mentions:
+    >>> matches = search_article_text(
+    ...     "10.1038/s41587-022-01278-2", r"(\\d+)\\s+amino\\s+acids?"
+    ... )
+
+    Find aggregation state mentions:
+    >>> matches = search_article_text(
+    ...     "10.1038/nmeth.4074", r"(monomer|dimer|tetramer|oligomer)"
+    ... )
+
+    Find quantum yield values:
+    >>> matches = search_article_text(
+    ...     "10.1038/s41587-022-01278-2", r"quantum\\s+yield[:\\s]+([0-9.]+)"
+    ... )
+
+    Find extinction coefficient (handles multiple formats):
+    >>> matches = search_article_text(
+    ...     "10.1038/s41587-022-01278-2",
+    ...     r"(extinction\\s+coefficient|ε|molar\\s+extinction).*?[\\d,]+\\s*M",
+    ... )
+
+    Find maturation time:
+    >>> matches = search_article_text(
+    ...     "10.1038/s41587-022-01278-2",
+    ...     r"matur(ation|ing).*?(\\d+\\.?\\d*)\\s*(h|hr|hour|min|minute)",
+    ... )
+
+    Notes
+    -----
+    Common search patterns for fluorescent protein properties:
+    - Oligomerization: "(monomer|dimer|tetramer|oligomer)"
+    - Extinction (ε): "(extinction\\s+coefficient|ε|molar\\s+extinction)"
+    - Quantum yield: "(quantum\\s+yield|QY|Φ)"
+    - Maturation: "matur(ation|ing).*?\\d+.*?(hour|min)"
+    - pKa: "pKa.*?\\d+\\.?\\d*"
+    - Photostability: "(photostab|bleach|half.?life)"
+
+    Regex tips:
+    - Use \\s+ for flexible whitespace (matches spaces, newlines)
+    - Use .*? for optional connecting text between terms
+    - Use alternation (|) to catch synonyms and abbreviations
+    - Numbers may have commas: use [\\d,]+ to match "159,000"
+    - Greek letters work: ε (epsilon), Φ (phi for quantum yield)
+
+    Limitations:
+    - Requires full-text availability (returns [] if article not accessible)
+    - All searches are case-insensitive
+    - Default 500-char context may not capture complete paragraphs
+    - Very complex patterns may miss edge cases
+    """
+    result = get_fulltext(article_id)
+    if result is None:
+        return []
+
+    text = extract_text(result)
+    if not text:
+        return []
+
+    matches = []
+    for match in re.finditer(pattern, text, re.IGNORECASE):
+        start = max(0, match.start() - context_chars)
+        end = min(len(text), match.end() + context_chars)
+
+        # Add ellipsis if we're not at the start/end
+        snippet = text[start:end]
+        if start > 0:
+            snippet = "..." + snippet
+        if end < len(text):
+            snippet = snippet + "..."
+
+        matches.append(
+            {"text": snippet, "position": match.start(), "match": match.group()}
+        )
+
+    return matches
 
 
 @mcp.tool

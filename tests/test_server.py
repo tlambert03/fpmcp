@@ -12,12 +12,13 @@ async def main_mcp_client():
 
 async def test_list_tools(main_mcp_client: Client[FastMCPTransport]):
     list_tools = await main_mcp_client.list_tools()
-    assert len(list_tools) >= 4
+    assert len(list_tools) >= 5
     tool_names = [tool.name for tool in list_tools]
     assert "get_article_tables" in tool_names
     assert "get_article_text" in tool_names
     assert "get_article_info" in tool_names
     assert "get_protein_article_ids" in tool_names
+    assert "search_article_text" in tool_names
 
 
 async def test_get_article_tables(main_mcp_client: Client[FastMCPTransport]):
@@ -132,3 +133,46 @@ async def test_get_protein_article_ids(main_mcp_client: Client[FastMCPTransport]
     # Should contain at least one article identifier
     # The StayGold paper should be in the results
     assert "10.1038" in ids_str or "PMC" in ids_str or any(c.isdigit() for c in ids_str)
+
+
+async def test_search_article_text(main_mcp_client: Client[FastMCPTransport]):
+    """Test searching article text for patterns."""
+    # Search for oligomerization mentions in the StayGold paper
+    result = await main_mcp_client.call_tool(
+        "search_article_text",
+        {
+            "article_id": "10.1038/s41587-022-01278-2",
+            "pattern": "(monomer|dimer|oligomer)",
+        },
+    )
+    matches_str = result.content[0].text
+    assert isinstance(matches_str, str)
+    assert len(matches_str) > 0
+
+    # Should find mentions of dimerization or oligomerization
+    assert (
+        "monomer" in matches_str.lower()
+        or "dimer" in matches_str.lower()
+        or "oligomer" in matches_str.lower()
+    )
+
+    # Should contain context around the match
+    assert "text" in matches_str.lower()
+    assert "match" in matches_str.lower()
+
+
+async def test_search_article_text_quantum_yield(
+    main_mcp_client: Client[FastMCPTransport],
+):
+    """Test searching for quantum yield in article text."""
+    # Search for quantum yield mentions
+    result = await main_mcp_client.call_tool(
+        "search_article_text",
+        {"article_id": "10.1038/s41587-022-01278-2", "pattern": r"quantum\s+yield"},
+    )
+    matches_str = result.content[0].text
+    assert isinstance(matches_str, str)
+    assert len(matches_str) > 0
+
+    # Should find quantum yield mentions
+    assert "quantum" in matches_str.lower() and "yield" in matches_str.lower()
