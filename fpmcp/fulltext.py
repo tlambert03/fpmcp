@@ -5,22 +5,25 @@ scientific articles using any common identifier (DOI, PMID, PMCID).
 
 The fetching strategy uses a waterfall approach:
 1. Try Europe PMC for structured JATS XML (best for tables/structured data)
-2. Fall back to PDF from Unpaywall (open access priority)
-3. Fall back to PDF from CrossRef
 """
 
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass
-from io import BytesIO
-from typing import Literal
-
-import requests
+from typing import TYPE_CHECKING, Literal
 
 from fpmcp.article_id import ArticleIdentifier
 from fpmcp.crossref.utils import get_fulltext_urls_from_crossref
 from fpmcp.europmc.utils import _fulltext_xml, _search
+from fpmcp.http import get_session
 from fpmcp.unpaywall.utils import get_unpaywall_data
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,6 +51,103 @@ class FullTextResult:
     url: str
 
 
+@dataclass
+class FullTextSource:
+    """A lazy source for full-text content.
+
+    This is a callable object that fetches content only when invoked,
+    allowing inspection of available sources without immediately downloading.
+
+    Attributes
+    ----------
+    name : str
+        Source name: "europmc", "unpaywall", or "crossref"
+    article_id : ArticleIdentifier
+        The article to fetch
+    _fetch_fn : Callable
+        Function to call to fetch the content
+    """
+
+    name: Literal["europmc", "unpaywall", "crossref"]
+    article_id: ArticleIdentifier
+    _fetch_fn: Callable[[], FullTextResult | None]
+
+    def __call__(self) -> FullTextResult | None:
+        """Fetch the full-text content from this source.
+
+        Returns
+        -------
+        FullTextResult | None
+            The fetched content, or None if unavailable
+        """
+        return self._fetch_fn()
+
+
+def get_fulltext_sources(any_id: str | ArticleIdentifier) -> list[FullTextSource]:
+    """Get all potential sources for full-text without fetching content.
+
+    This allows inspection of available sources and lazy fetching only
+    when needed. Each source is a callable that fetches when invoked.
+
+    Parameters
+    ----------
+    any_id : str | ArticleIdentifier
+        Any article identifier: DOI, PMID, or PMCID
+
+    Returns
+    -------
+    list[FullTextSource]
+        List of available sources, ordered by preference (XML > PDF)
+
+    Examples
+    --------
+    >>> sources = get_fulltext_sources("10.1038/s41592-023-02085-6")
+    >>> for source in sources:
+    ...     print(f"Available: {source.name}")
+    ...     result = source()  # Fetch only when needed
+    ...     if result:
+    ...         break
+    """
+    # Normalize the identifier
+    article_id = (
+        any_id if isinstance(any_id, ArticleIdentifier) else ArticleIdentifier(any_id)
+    )
+
+    sources = []
+
+    # Strategy 1: Europe PMC for structured XML
+    if article_id.pmid:
+        sources.append(
+            FullTextSource(
+                name="europmc",
+                article_id=article_id,
+                _fetch_fn=lambda aid=article_id: _try_europmc(aid),
+            )
+        )
+
+    # Strategy 2: Unpaywall for PDF
+    if article_id.doi:
+        sources.append(
+            FullTextSource(
+                name="unpaywall",
+                article_id=article_id,
+                _fetch_fn=lambda aid=article_id: _try_unpaywall(aid),
+            )
+        )
+
+    # Strategy 3: CrossRef for PDF
+    if article_id.doi:
+        sources.append(
+            FullTextSource(
+                name="crossref",
+                article_id=article_id,
+                _fetch_fn=lambda aid=article_id: _try_crossref(aid),
+            )
+        )
+
+    return sources
+
+
 def get_fulltext(any_id: str | ArticleIdentifier) -> FullTextResult | None:
     """Fetch full-text content from any article identifier.
 
@@ -71,22 +171,11 @@ def get_fulltext(any_id: str | ArticleIdentifier) -> FullTextResult | None:
     ...     print(f"Found {result.format} from {result.source}")
     ...     tables = extract_tables(result)
     """
-    # Normalize the identifier
-    article_id = (
-        any_id if isinstance(any_id, ArticleIdentifier) else ArticleIdentifier(any_id)
-    )
-
-    # Strategy 1: Try Europe PMC for structured XML
-    if result := _try_europmc(article_id):
-        return result
-
-    # Strategy 2: Try Unpaywall for PDF
-    if result := _try_unpaywall(article_id):
-        return result
-
-    # Strategy 3: Try CrossRef for PDF
-    if result := _try_crossref(article_id):
-        return result
+    # Get all available sources and try each in order
+    for source in get_fulltext_sources(any_id):
+        logger.debug("Trying source: %s", source.name)
+        if result := source():
+            return result
 
     return None
 
@@ -175,15 +264,38 @@ def _try_crossref(article_id: ArticleIdentifier) -> FullTextResult | None:
 
 
 def _download_pdf(url: str, timeout: int = 30) -> bytes | None:
-    """Download PDF from a URL."""
+    """Download PDF from a URL with timing debug info."""
+    start = time.time()
     try:
-        response = requests.get(url, timeout=timeout)
+        logger.debug("Starting PDF download from: %s", url)
+
+        # Use shared session for connection pooling
+        session = get_session()
+
+        # Time the request
+        req_start = time.time()
+        response = session.get(url, timeout=timeout, stream=False)
+        req_time = time.time() - req_start
+        logger.debug("Request took %.2fs, status: %d", req_time, response.status_code)
+
         response.raise_for_status()
 
         # Verify it's actually a PDF
         if response.content[:4] == b"%PDF":
+            total_time = time.time() - start
+            size_mb = len(response.content) / (1024 * 1024)
+            logger.debug(
+                "Downloaded %.2fMB PDF in %.2fs (%.2fMB/s)",
+                size_mb,
+                total_time,
+                size_mb / total_time,
+            )
             return response.content
-    except Exception:
+        else:
+            logger.debug("Not a PDF, first 4 bytes: %s", response.content[:4])
+    except Exception as e:
+        elapsed = time.time() - start
+        logger.debug("Failed after %.2fs: %s: %s", elapsed, type(e).__name__, e)
         pass
 
     return None
@@ -191,9 +303,6 @@ def _download_pdf(url: str, timeout: int = 30) -> bytes | None:
 
 def extract_tables(fulltext: FullTextResult) -> list[str]:
     """Extract tables from full-text content as markdown.
-
-    Works with both XML and PDF sources. XML provides better structured
-    tables via JATS parsing, while PDF uses heuristic table detection.
 
     Parameters
     ----------
@@ -215,8 +324,7 @@ def extract_tables(fulltext: FullTextResult) -> list[str]:
         assert isinstance(fulltext.content, str)
         return _extract_tables_from_xml(fulltext.content)
     else:  # PDF
-        assert isinstance(fulltext.content, bytes)
-        return _extract_tables_from_pdf(fulltext.content)
+        raise NotImplementedError("PDF table extraction not yet implemented")
 
 
 def _extract_tables_from_xml(xml_content: str) -> list[str]:
@@ -224,87 +332,6 @@ def _extract_tables_from_xml(xml_content: str) -> list[str]:
     from fpmcp.util import iter_tables
 
     return list(iter_tables(xml_content))
-
-
-def _extract_tables_from_pdf(pdf_content: bytes) -> list[str]:
-    """Extract tables from PDF using pdfplumber.
-
-    Parameters
-    ----------
-    pdf_content : bytes
-        Raw PDF bytes
-
-    Returns
-    -------
-    list[str]
-        List of tables in markdown format
-    """
-    import pdfplumber
-
-    tables = []
-
-    try:
-        with pdfplumber.open(BytesIO(pdf_content)) as pdf:
-            for page_num, page in enumerate(pdf.pages, 1):
-                for table_idx, table in enumerate(page.extract_tables()):
-                    if table:
-                        md_table = _pdf_table_to_markdown(table, page_num, table_idx)
-                        if md_table:
-                            tables.append(md_table)
-    except Exception:
-        pass
-
-    return tables
-
-
-def _pdf_table_to_markdown(
-    table: list[list[str | None]], page_num: int, table_idx: int
-) -> str | None:
-    """Convert pdfplumber table to markdown format.
-
-    Parameters
-    ----------
-    table : list[list[str | None]]
-        Table data from pdfplumber
-    page_num : int
-        Page number for reference
-    table_idx : int
-        Table index on the page
-
-    Returns
-    -------
-    str | None
-        Markdown formatted table
-    """
-    if not table or len(table) < 2:
-        return None
-
-    # Clean up None values and empty strings
-    cleaned_table = []
-    for row in table:
-        cleaned_row = [(cell or "").strip().replace("\n", " ") for cell in row]
-        # Skip completely empty rows
-        if any(cleaned_row):
-            cleaned_table.append(cleaned_row)
-
-    if len(cleaned_table) < 2:
-        return None
-
-    # Assume first row is header
-    headers = cleaned_table[0]
-    rows = cleaned_table[1:]
-
-    # Build markdown
-    lines = [f"**Table from page {page_num} (#{table_idx + 1})**\n"]
-    lines.append("| " + " | ".join(headers) + " |")
-    lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
-
-    for row in rows:
-        # Pad row to match header length
-        row.extend([""] * (len(headers) - len(row)))
-        lines.append("| " + " | ".join(row[: len(headers)]) + " |")
-
-    return "\n".join(lines)
 
 
 def extract_text(fulltext: FullTextResult) -> str:
@@ -328,9 +355,8 @@ def extract_text(fulltext: FullTextResult) -> str:
     if fulltext.format == "xml":
         assert isinstance(fulltext.content, str)
         return _extract_text_from_xml(fulltext.content)
-    else:  # PDF
-        assert isinstance(fulltext.content, bytes)
-        return _extract_text_from_pdf(fulltext.content)
+    else:
+        raise NotImplementedError("PDF text extraction not yet implemented")
 
 
 def _extract_text_from_xml(xml_content: str) -> str:
@@ -343,20 +369,3 @@ def _extract_text_from_xml(xml_content: str) -> str:
         return "".join(root.itertext())
     except Exception:
         return ""
-
-
-def _extract_text_from_pdf(pdf_content: bytes) -> str:
-    """Extract plain text from PDF."""
-    import pdfplumber
-
-    text_parts = []
-
-    try:
-        with pdfplumber.open(BytesIO(pdf_content)) as pdf:
-            for page in pdf.pages:
-                if page_text := page.extract_text():
-                    text_parts.append(page_text)
-    except Exception:
-        pass
-
-    return "\n\n".join(text_parts)

@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 import requests
 
+from fpmcp.http import get_session
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from typing import Any
@@ -95,7 +97,7 @@ class ArticleIdentifier:
 
     def _try_pmc_converter(self, id_value: str, idtype: str) -> bool:
         try:
-            response = requests.get(
+            response = get_session().get(
                 "https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/",
                 params={
                     "ids": id_value,
@@ -138,7 +140,7 @@ class ArticleIdentifier:
             return False
 
         try:
-            response = requests.get(
+            response = get_session().get(
                 "https://www.ebi.ac.uk/europepmc/webservices/rest/search",
                 params={"query": query, "format": "json"},
                 timeout=10,

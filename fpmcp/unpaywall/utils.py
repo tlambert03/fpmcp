@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import cache
 
-import requests
+from fpmcp.http import get_session
 
 EMAIL = "talley@hms.harvard.edu"
 
@@ -22,6 +22,6 @@ def get_unpaywall_data(doi: str) -> dict:
         The Unpaywall response containing OA location and metadata.
     """
     url = f"https://api.unpaywall.org/v2/{doi}"
-    response = requests.get(url, params={"email": EMAIL})
+    response = get_session().get(url, params={"email": EMAIL})
     response.raise_for_status()
     return response.json()

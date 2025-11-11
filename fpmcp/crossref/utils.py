@@ -1,4 +1,4 @@
-import requests
+from fpmcp.http import get_session
 
 
 def get_fulltext_urls_from_crossref(doi: str) -> dict:
@@ -7,7 +7,7 @@ def get_fulltext_urls_from_crossref(doi: str) -> dict:
     Returns: dict with PDF/XML URLs and license info
     """
     url = f"https://api.crossref.org/works/{doi}"
-    response = requests.get(url)
+    response = get_session().get(url)
 
     if response.status_code == 200:
         data = response.json()["message"]

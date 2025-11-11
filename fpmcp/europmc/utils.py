@@ -1,8 +1,7 @@
 from typing import Final
 
-import requests
-
 from fpmcp.europmc.models import Model as SearchResponse
+from fpmcp.http import get_session
 
 # https://europepmc.org/RestfulWebService
 ROOT: Final = "https://www.ebi.ac.uk/europepmc/webservices/rest"
@@ -10,7 +9,7 @@ ROOT: Final = "https://www.ebi.ac.uk/europepmc/webservices/rest"
 
 def _search(query: str) -> SearchResponse:
     # https://europepmc.org/RestfulWebService#!/Europe32PMC32Articles32RESTful32API/search
-    response = requests.get(
+    response = get_session().get(
         f"{ROOT}/search",
         params={"query": query, "format": "json", "resultType": "core"},
     )
@@ -20,7 +19,7 @@ def _search(query: str) -> SearchResponse:
 
 def _fulltext_xml(pmcid: str) -> str | None:
     # https://europepmc.org/RestfulWebService#!/Europe32PMC32Articles32RESTful32API/fullTextXML
-    xml_response = requests.get(f"{ROOT}/{pmcid}/fullTextXML")
+    xml_response = get_session().get(f"{ROOT}/{pmcid}/fullTextXML")
     if xml_response.status_code == 200:
         return xml_response.text
     return None
