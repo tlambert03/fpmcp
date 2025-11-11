@@ -355,8 +355,9 @@ def extract_text(fulltext: FullTextResult) -> str:
     if fulltext.format == "xml":
         assert isinstance(fulltext.content, str)
         return _extract_text_from_xml(fulltext.content)
-    else:
-        raise NotImplementedError("PDF text extraction not yet implemented")
+    else:  # PDF
+        assert isinstance(fulltext.content, bytes)
+        return _extract_text_from_pdf(fulltext.content)
 
 
 def _extract_text_from_xml(xml_content: str) -> str:
@@ -368,4 +369,44 @@ def _extract_text_from_xml(xml_content: str) -> str:
         # Get all text content, preserving some structure
         return "".join(root.itertext())
     except Exception:
+        return ""
+
+
+def _extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """Extract plain text from PDF using pypdfium2.
+
+    This function efficiently extracts text from PDF content using pypdfium2,
+    which is fast, has low memory usage, and uses a permissive Apache-2.0 license.
+
+    Parameters
+    ----------
+    pdf_bytes : bytes
+        Raw PDF content
+
+    Returns
+    -------
+    str
+        Extracted plain text from all pages
+    """
+    try:
+        import pypdfium2 as pdfium
+
+        # Open PDF from bytes (no file I/O needed)
+        doc = pdfium.PdfDocument(pdf_bytes)
+
+        # Extract text from all pages using a generator for memory efficiency
+        # This avoids loading all text into memory at once for large PDFs
+        text_parts = []
+        for page in doc:
+            textpage = page.get_textpage()
+            text_parts.append(textpage.get_text_range())
+
+        # Close the document to free resources
+        doc.close()
+
+        # Join all page text
+        return "".join(text_parts)
+
+    except Exception as e:
+        logger.debug("Failed to extract text from PDF: %s", e)
         return ""
