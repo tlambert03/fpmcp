@@ -186,12 +186,8 @@ def search_article_text(
     - Default 500-char context may not capture complete paragraphs
     - Very complex patterns may miss edge cases
     """
-    result = get_fulltext(article_id)
-    if result is None:
-        return []
 
-    text = extract_text(result)
-    if not text:
+    if not (result := get_fulltext(article_id)) or not (text := extract_text(result)):
         return []
 
     matches = []

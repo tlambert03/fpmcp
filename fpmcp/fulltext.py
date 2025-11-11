@@ -354,22 +354,27 @@ def extract_text(fulltext: FullTextResult) -> str:
     """
     if fulltext.format == "xml":
         assert isinstance(fulltext.content, str)
-        return _extract_text_from_xml(fulltext.content)
+        try:
+            return _extract_text_from_xml(fulltext.content)
+        except Exception as e:
+            logger.debug("Failed to extract text from XML: %s", e)
+            return ""
     else:  # PDF
         assert isinstance(fulltext.content, bytes)
-        return _extract_text_from_pdf(fulltext.content)
+        try:
+            return _extract_text_from_pdf(fulltext.content)
+        except Exception as e:
+            logger.debug("Failed to extract text from PDF: %s", e)
+            return ""
 
 
 def _extract_text_from_xml(xml_content: str) -> str:
     """Extract plain text from JATS XML."""
     import xml.etree.ElementTree as ET
 
-    try:
-        root = ET.fromstring(xml_content)
-        # Get all text content, preserving some structure
-        return "".join(root.itertext())
-    except Exception:
-        return ""
+    root = ET.fromstring(xml_content)
+    # Get all text content, preserving some structure
+    return "".join(root.itertext())
 
 
 def _extract_text_from_pdf(pdf_bytes: bytes) -> str:
@@ -388,25 +393,20 @@ def _extract_text_from_pdf(pdf_bytes: bytes) -> str:
     str
         Extracted plain text from all pages
     """
-    try:
-        import pypdfium2 as pdfium
+    import pypdfium2 as pdfium
 
-        # Open PDF from bytes (no file I/O needed)
-        doc = pdfium.PdfDocument(pdf_bytes)
+    # Open PDF from bytes (no file I/O needed)
+    doc = pdfium.PdfDocument(pdf_bytes)
 
-        # Extract text from all pages using a generator for memory efficiency
-        # This avoids loading all text into memory at once for large PDFs
-        text_parts = []
-        for page in doc:
-            textpage = page.get_textpage()
-            text_parts.append(textpage.get_text_range())
+    # Extract text from all pages using a generator for memory efficiency
+    # This avoids loading all text into memory at once for large PDFs
+    text_parts = []
+    for page in doc:
+        textpage = page.get_textpage()
+        text_parts.append(textpage.get_text_range())
 
-        # Close the document to free resources
-        doc.close()
+    # Close the document to free resources
+    doc.close()
 
-        # Join all page text
-        return "".join(text_parts)
-
-    except Exception as e:
-        logger.debug("Failed to extract text from PDF: %s", e)
-        return ""
+    # Join all page text
+    return "".join(text_parts)
