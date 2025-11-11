@@ -116,6 +116,9 @@ async def test_get_article_info(main_mcp_client: Client[FastMCPTransport]):
     assert "doi" in info_str.lower()
     # Should contain the DOI we requested
     assert "10.1038/s41592-023-02085-6" in info_str
+    # Should contain a URL field with a valid URL
+    assert "url" in info_str.lower()
+    assert "http" in info_str.lower()
 
 
 async def test_get_protein_article_ids(main_mcp_client: Client[FastMCPTransport]):
